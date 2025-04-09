@@ -1,0 +1,20 @@
+[
+  {
+    "JobName": "partner-ui",
+    "CodeRepository": "http://gitlab.codehub.com/xkd/uis/partner-ui.git",
+    "ConfigRepository": "http://gitlab.codehub.com/devops/exchange-front-manager-ui.git",
+    "ConfigBranch": "master",
+    "ProjectName": "Test-Test",
+    "BranchName": "Nmec",
+    "AppName": "partner-ui",
+    "ServiceName": "partner-ui",
+    "ServicePort": "[80]",
+    "LimitMemory": "128Mi",
+    "LimitCpu": "",
+    "PriorityClassName": "apps",
+    "RequestsMemory": "128Mi",
+    "RequestsCpu": "",
+    "TARGET": "dist",
+    "APIDomain": "http://api-partner.test.com"
+  }
+]

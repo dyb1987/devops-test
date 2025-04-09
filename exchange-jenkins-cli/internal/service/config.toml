@@ -1,0 +1,4 @@
+[jenkins]
+url = "http://jenkins.codehub.com:8080"
+username = "release-auto-build"
+password = "release-auto-build"

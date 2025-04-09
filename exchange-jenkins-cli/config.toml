@@ -1,0 +1,4 @@
+[jenkins]
+url = "http://jenkins.domain.com"
+username = "admin"
+password = "123456"

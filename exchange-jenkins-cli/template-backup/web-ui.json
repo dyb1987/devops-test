@@ -1,0 +1,20 @@
+[
+  {
+    "JobName": "web-ui",
+    "CodeRepository": "http://gitlab.codehub.com/xkd/uis/web-ui.git",
+    "ConfigRepository": "http://gitlab.codehub.com/devops/exchange-front-web-ui.git",
+    "ConfigBranch": "master",
+    "ProjectName": "Test-Test",
+    "BranchName": "Nmec",
+    "AppName": "web-ui",
+    "ServiceName": "web-ui",
+    "ServicePort": "[80]",
+    "LimitMemory": "256Mi",
+    "LimitCpu": "",
+    "PriorityClassName": "apps",
+    "RequestsMemory": "256Mi",
+    "RequestsCpu": "",
+    "TARGET": "dist",
+    "DomainNames": "test.com test2.com"
+  }
+]

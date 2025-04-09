@@ -1,0 +1,58 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.name }}
+  namespace: apps
+spec:
+  replicas: 1
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      {{- range $k, $v := .Values.labels }}
+      {{ $k }}: {{ $v }}
+      {{- end }}
+  template:
+    metadata:
+      labels:
+        {{- range $k, $v := .Values.labels }}
+        {{ $k }}: {{ $v }}
+        {{- end }}
+    spec:
+      automountServiceAccountToken: false
+      imagePullSecrets:
+      {{- range .Values.imagePullSecrets }}
+      - name: {{ . }}  
+      {{- end }}
+      securityContext:
+        runAsUser: 2000
+        runAsGroup: 2000
+      containers:
+      - name: {{ .Values.name }}
+        image: k8s-harbor.exchange.local/{{ .Values.image.repository }}/{{ .Values.image.name }}:{{ .Values.image.tag}}
+        imagePullPolicy: Always
+        securityContext:
+          capabilities:
+            add: ["SYS_PTRACE"]
+        env:
+        - name: TZ
+          value: "{{ .Values.timezone }}"
+        volumeMounts:
+        - name: app-logs
+          mountPath: /usr/local/logs
+        - name: host-time
+          mountPath: /etc/localtime
+          readOnly: true
+        {{- include "app.resources" . | nindent 8 }}
+        {{- if .Values.priorityClassName }}
+        priorityClassName: {{ .Values.priorityClassName }}
+        {{- end }} 
+      volumes:
+      - name: app-logs
+        persistentVolumeClaim:
+          claimName: app-logs
+      - name: host-time
+        hostPath: 
+          path: /etc/localtime

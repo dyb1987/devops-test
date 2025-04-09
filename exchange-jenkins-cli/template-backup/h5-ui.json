@@ -1,0 +1,20 @@
+[
+  {
+    "JobName": "h5-ui",
+    "CodeRepository": "http://gitlab.codehub.com/frame/exchange-h5.git",
+    "ConfigRepository": "http://gitlab.codehub.com/devops/exchange-front-h5-ui.git",
+    "ConfigBranch": "master",
+    "ProjectName": "Test-Test",
+    "BranchName": "Nmec",
+    "AppName": "h5-ui",
+    "ServiceName": "h5-ui",
+    "ServicePort": "[80]",
+    "LimitMemory": "256Mi",
+    "LimitCpu": "",
+    "PriorityClassName": "apps",
+    "RequestsMemory": "256Mi",
+    "RequestsCpu": "",
+    "TARGET": "dist",
+    "DomainNames": "test.com test2.com"
+  }
+]

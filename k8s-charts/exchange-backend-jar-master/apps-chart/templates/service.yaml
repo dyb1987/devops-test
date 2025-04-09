@@ -1,0 +1,3 @@
+{{- if .Values.service.name }}
+{{ template "app.service" . }}
+{{- end}}

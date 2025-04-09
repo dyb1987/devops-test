@@ -1,0 +1,25 @@
+# 接收生产流量的Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: canary-active
+spec:
+  type: ClusterIP
+  selector:
+    app: demo
+  ports:
+    - name: http
+      port: 8888
+---
+# 接收预览测试流量的Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: canary-preview
+spec:
+  type: ClusterIP
+  selector:
+    app: demo
+  ports:
+    - name: http
+      port: 8888

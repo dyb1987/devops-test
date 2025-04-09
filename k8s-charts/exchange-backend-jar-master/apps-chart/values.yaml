@@ -1,0 +1,20 @@
+replicas: 1
+name: __NAME__
+image:
+  repository: __PROJECT_NAME__
+  name: __NAME__
+  tag: __TAG__
+imagePullSecrets: ["apps-registry"]
+labels:
+  app: __NAME__
+  project: __PROJECT_NAME__
+resources:
+  limits:
+    memory: __LIMIT_MEMORY__
+  requests:
+    memory: __REQUESTS_MEMORY__
+priorityClassName: __PRIORITY_CLASS_NAME__
+service:
+  name: __SERVICE_NAME__
+  port: __PORT__
+timezone: __TZ__

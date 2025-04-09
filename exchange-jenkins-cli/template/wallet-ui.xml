@@ -1,0 +1,214 @@
+<?xml version='1.1' encoding='UTF-8'?>
+<flow-definition plugin="workflow-job@1326.ve643e00e9220">
+  <actions>
+    <org.jenkinsci.plugins.pipeline.modeldefinition.actions.DeclarativeJobAction plugin="pipeline-model-definition@2.2150.v4cfd8916915c"/>
+    <org.jenkinsci.plugins.pipeline.modeldefinition.actions.DeclarativeJobPropertyTrackerAction plugin="pipeline-model-definition@2.2150.v4cfd8916915c">
+      <jobProperties/>
+      <triggers/>
+      <parameters>
+        <string>BRANCH</string>
+        <string>restart</string>
+        <string>versionName</string>
+      </parameters>
+      <options/>
+    </org.jenkinsci.plugins.pipeline.modeldefinition.actions.DeclarativeJobPropertyTrackerAction>
+  </actions>
+  <description>{{ APP_NAME }}</description>
+  <keepDependencies>false</keepDependencies>
+  <properties>
+    <com.dabsquared.gitlabjenkins.connection.GitLabConnectionProperty plugin="gitlab-plugin@1.5.20">
+      <gitLabConnection>gitlab-api-token</gitLabConnection>
+      <jobCredentialId></jobCredentialId>
+      <useAlternativeCredential>false</useAlternativeCredential>
+    </com.dabsquared.gitlabjenkins.connection.GitLabConnectionProperty>
+    <jenkins.model.BuildDiscarderProperty>
+      <strategy class="hudson.tasks.LogRotator">
+        <daysToKeep>3</daysToKeep>
+        <numToKeep>10</numToKeep>
+        <artifactDaysToKeep>-1</artifactDaysToKeep>
+        <artifactNumToKeep>-1</artifactNumToKeep>
+      </strategy>
+    </jenkins.model.BuildDiscarderProperty>
+    <hudson.model.ParametersDefinitionProperty>
+      <parameterDefinitions>
+        <hudson.model.StringParameterDefinition>
+          <name>BRANCH</name>
+          <description>分支名称</description>
+          <defaultValue>{{ BRANCH_NAME }}</defaultValue>
+          <trim>false</trim>
+        </hudson.model.StringParameterDefinition>
+        <hudson.model.ChoiceParameterDefinition>
+          <name>restart</name>
+          <description>重启服务</description>
+          <choices>
+            <string>false</string>
+            <string>true</string>
+          </choices>
+        </hudson.model.ChoiceParameterDefinition>
+      </parameterDefinitions>
+    </hudson.model.ParametersDefinitionProperty>
+  </properties>
+  <definition class="org.jenkinsci.plugins.workflow.cps.CpsFlowDefinition" plugin="workflow-cps@3837.v305192405b_c0">
+    <script>
+pipeline {
+    agent {
+        label &apos;build&apos;
+    }
+
+    parameters {
+        string defaultValue: &apos;{{ BRANCH_NAME }}&apos;, description: &apos;分支名称&apos;, name: &apos;BRANCH&apos;
+        choice choices: [&apos;false&apos;, &apos;true&apos;], description: &apos;重启服务&apos;, name: &apos;restart&apos;
+    }
+
+    environment {
+        def IMAGE_TAG = sh(script: &apos;date +%Y-%m-%d-%H-%M&apos;, returnStdout:true).trim()
+        IMAGE_HARBOR = &quot;{{ IMAGE_HARBOR }}&quot;
+        CODE_REPOSITORY = &quot;{{ CODE_REPOSITORY }}&quot;
+        CONFIG_REPOSITORY = &quot;{{ CONFIG_REPOSITORY }}&quot;
+        CONFIG_BRANCH = &quot;{{ CONFIG_BRANCH }}&quot;
+        PROJECT_NAME = &quot;{{ PROJECT_NAME }}&quot;
+        APP_NAME = &quot;{{ APP_NAME }}&quot;
+        SERVICE_NAME = &quot;{{ SERVICE_NAME }}&quot;
+        SERVICE_PORT = &quot;{{ SERVICE_PORT }}&quot;
+        LIMIT_MEMORY = &quot;{{ LIMIT_MEMORY }}&quot;
+        PRIORITY_CLASS_NAME = &quot;{{ PRIORITY_CLASS_NAME }}&quot;
+        REQUESTS_MEMORY = &quot;{{ REQUESTS_MEMORY }}&quot;
+        TARGET = &quot;{{ TARGET }}&quot;
+    }
+
+    stages {
+        stage(&apos;清理工作空间&apos;) {
+            when {
+                allOf {
+                    environment name: &apos;restart&apos;, value: &apos;false&apos;
+                }
+            }
+            steps {
+                deleteDir()
+            }
+        }
+
+        stage(&apos;克隆代码仓库&apos;) {
+            when {
+                allOf {
+                    environment name: &apos;restart&apos;, value: &apos;false&apos;
+                }
+            }
+            steps {
+                checkout([$class: &apos;GitSCM&apos;, branches: [[name: &quot;*/${BRANCH}&quot;]], extensions: [], userRemoteConfigs: [[credentialsId: &apos;jenkins&apos;, url: &quot;${CODE_REPOSITORY}&quot;]]])
+            }
+        }
+
+        stage(&quot;预处理配置文件&quot;){
+            when {
+                allOf {
+                    environment name: &apos;restart&apos;, value: &apos;false&apos;
+                }
+            }
+            steps {
+                script {
+                    sh  &apos;&apos;&apos;
+                        sed -i &quot;/case 'prod'/,/return.*/s#return.*#return '{{ API_DOMAIN }}'#g&quot; ${WORKSPACE}/src/utils/env.js
+                    &apos;&apos;&apos;
+                }
+            }
+        }
+
+        stage(&quot;构建项目&quot;) {
+            when {
+                allOf {
+                    environment name: &apos;restart&apos;, value: &apos;false&apos;
+                }
+            }
+            steps {
+                nodejs(cacheLocationStrategy: workspace(), nodeJSInstallationName: &apos;nodejs14&apos;) {
+                    sh &apos;&apos;&apos;
+                        npm install
+                        npm run build--prod
+                    &apos;&apos;&apos;
+                }
+            }
+        }
+
+        stage(&apos;克隆配置仓库&apos;) {
+            when {
+                allOf {
+                    environment name: &apos;restart&apos;, value: &apos;false&apos;
+                }
+            }
+            steps {
+                checkout([$class: &apos;GitSCM&apos;, branches: [[name: &quot;*/${CONFIG_BRANCH}&quot;]], extensions: [[$class: &apos;RelativeTargetDirectory&apos;, relativeTargetDir: &apos;configs&apos;]], userRemoteConfigs: [[credentialsId: &apos;jenkins&apos;, url: &quot;${CONFIG_REPOSITORY}&quot;]]])
+            }
+        }
+
+        stage(&apos;构建镜像并上传到Harbor仓库&apos;) {
+            when {
+                allOf {
+                    environment name: &apos;restart&apos;, value: &apos;false&apos;
+                }
+            }
+            steps {
+                sh &apos;mv ${TARGET} configs/&apos;
+                dir(&apos;configs/&apos;) {
+                    script {
+                        docker.withRegistry(&quot;https://${IMAGE_HARBOR}&quot;, &apos;docker-registry&apos;) {
+                            def App = docker.build(&quot;${IMAGE_HARBOR}/${PROJECT_NAME}/${APP_NAME}:${IMAGE_TAG}&quot;, &quot;-f Dockerfile .&quot;)
+                            App.push()
+                        }
+                        sh &apos;docker rmi ${IMAGE_HARBOR}/${PROJECT_NAME}/${APP_NAME}:${IMAGE_TAG}&apos;
+                    }
+                }
+
+            }
+        }
+
+
+        stage(&apos;部署到kubernetes集群中&apos;) {
+            when {
+                allOf {
+                    environment name: &apos;restart&apos;, value: &apos;false&apos;
+                }
+            }
+            steps {
+                withKubeConfig(credentialsId: &apos;{{ KUBE_CONFIG }}&apos;) {
+                    sh &apos;&apos;&apos;
+                        cd configs/apps-chart
+                        sed -i -e &quot;s#__NAME__#$APP_NAME#g&quot; \
+                            -e &quot;s#__PROJECT_NAME__#$PROJECT_NAME#g&quot; \
+                            -e &quot;s#__TAG__#$IMAGE_TAG#g&quot; \
+                            -e &quot;s#__LIMIT_MEMORY__#$LIMIT_MEMORY#g&quot; \
+                            -e &quot;s#__REQUESTS_MEMORY__#$REQUESTS_MEMORY#g&quot; \
+                            -e &quot;s#__SERVICE_NAME__#$SERVICE_NAME#g&quot; \
+                            -e &quot;s#__PORT__#$SERVICE_PORT#g&quot; \
+                            -e &quot;s#__PRIORITY_CLASS_NAME__#$PRIORITY_CLASS_NAME#g&quot; values.yaml
+                        helm template . &gt; apps.yaml
+                        cat apps.yaml
+                        kubectl apply -f apps.yaml
+                    &apos;&apos;&apos;
+                }
+            }
+        }
+        stage(&apos;重启Pod&apos;) {
+            when {
+                allOf {
+                    environment name: &apos;restart&apos;, value: &apos;true&apos;
+                }
+
+            }
+            steps {
+                withKubeConfig(credentialsId: &apos;{{ KUBE_CONFIG }}&apos;) {
+                    sh &apos;&apos;&apos;
+                        kubectl rollout restart deployment/${APP_NAME} -n apps
+                    &apos;&apos;&apos;
+                }
+            }
+        }
+    }
+
+}</script>
+    <sandbox>true</sandbox>
+  </definition>
+  <triggers/>
+  <disabled>false</disabled>
+</flow-definition>
+

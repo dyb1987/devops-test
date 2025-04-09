@@ -1,0 +1,235 @@
+<?xml version='1.1' encoding='UTF-8'?>
+<flow-definition plugin="workflow-job@1326.ve643e00e9220">
+    <actions>
+        <org.jenkinsci.plugins.pipeline.modeldefinition.actions.DeclarativeJobAction plugin="pipeline-model-definition@2.2150.v4cfd8916915c"/>
+        <org.jenkinsci.plugins.pipeline.modeldefinition.actions.DeclarativeJobPropertyTrackerAction plugin="pipeline-model-definition@2.2150.v4cfd8916915c">
+            <jobProperties/>
+            <triggers/>
+            <parameters>
+                <string>BRANCH</string>
+                <string>restart</string>
+            </parameters>
+            <options/>
+        </org.jenkinsci.plugins.pipeline.modeldefinition.actions.DeclarativeJobPropertyTrackerAction>
+    </actions>
+    <description>{{ APP_NAME }}</description>
+    <keepDependencies>false</keepDependencies>
+    <properties>
+        <jenkins.model.BuildDiscarderProperty>
+          <strategy class="hudson.tasks.LogRotator">
+            <daysToKeep>3</daysToKeep>
+            <numToKeep>10</numToKeep>
+            <artifactDaysToKeep>-1</artifactDaysToKeep>
+            <artifactNumToKeep>-1</artifactNumToKeep>
+          </strategy>
+        </jenkins.model.BuildDiscarderProperty>
+        <hudson.model.ParametersDefinitionProperty>
+          <parameterDefinitions>
+            <hudson.model.StringParameterDefinition>
+              <name>BRANCH</name>
+              <description>分支名称</description>
+              <defaultValue>{{ BRANCH_NAME }}</defaultValue>
+              <trim>false</trim>
+            </hudson.model.StringParameterDefinition>
+            <hudson.model.ChoiceParameterDefinition>
+              <name>restart</name>
+              <description>重启服务</description>
+              <choices>
+                <string>false</string>
+                <string>true</string>
+              </choices>
+            </hudson.model.ChoiceParameterDefinition>
+          </parameterDefinitions>
+        </hudson.model.ParametersDefinitionProperty>
+      </properties>
+    <definition class="org.jenkinsci.plugins.workflow.cps.CpsFlowDefinition" plugin="workflow-cps@3837.v305192405b_c0">
+        <script>
+pipeline {
+    agent {
+        label &apos;build&apos;
+    }
+    tools {
+        maven &apos;maven&apos;
+        jdk &apos;jdk&apos;
+    }
+
+    parameters {
+        string defaultValue: &apos;{{ BRANCH_NAME }}&apos;, description: &apos;分支名称&apos;, name: &apos;BRANCH&apos;
+        choice choices: [&apos;false&apos;, &apos;true&apos;], description: &apos;重启服务&apos;, name: &apos;restart&apos;
+    }
+
+    environment {
+        def IMAGE_TAG = sh(script: &apos;date +%Y-%m-%d-%H-%M&apos;, returnStdout:true).trim()
+        MAIN_CLASS = &quot;&quot;
+        CLASSPATH = &quot;&quot;
+        IMAGE_HARBOR = &quot;{{ IMAGE_HARBOR }}&quot;
+        CODE_REPOSITORY = &quot;{{ CODE_REPOSITORY }}&quot;
+        CONFIG_REPOSITORY = &quot;{{ CONFIG_REPOSITORY }}&quot;
+        PROJECT_NAME = &quot;{{ PROJECT_NAME }}&quot;
+        CONFIG_BRANCH = &quot;{{ CONFIG_BRANCH }}&quot;
+        APP_NAME = &quot;{{ APP_NAME }}&quot;
+        SERVICE_NAME = &quot;{{ SERVICE_NAME }}&quot;
+        SERVICE_PORT = &quot;{{ SERVICE_PORT }}&quot;
+        LIMIT_MEMORY = &quot;{{ LIMIT_MEMORY }}&quot;
+        LIMIT_CPU = &quot;{{ LIMIT_CPU }}&quot;
+        PRIORITY_CLASS_NAME = &quot;{{ PRIORITY_CLASS_NAME }}&quot;
+        REQUESTS_MEMORY = &quot;{{ REQUESTS_MEMORY }}&quot;
+        REQUESTS_CPU = &quot;{{ REQUESTS_CPU }}&quot;
+        REPLICAS = {{ REPLICAS }}
+        TARGET = &quot;{{ TARGET }}&quot;
+        TIMEZONE = &quot;{{ TIMEZONE }}&quot;
+        JAVA_OPTS = &quot;{{ JAVA_OPTS }}&quot;
+        def IS_JOB = sh(script: &apos;echo &quot;{{ APP_NAME }}&quot; |awk -F \&apos;-\&apos; \&apos;{print $NF}\&apos;&apos;, returnStdout:true).trim()
+    }
+
+    stages {
+        stage(&apos;清理工作空间&apos;) {
+            when {
+                allOf {
+                    environment name: &apos;restart&apos;, value: &apos;false&apos;
+                }
+            }
+            steps {
+                deleteDir()
+            }
+        }
+
+        stage(&apos;克隆代码仓库&apos;) {
+            when {
+                allOf {
+                    environment name: &apos;restart&apos;, value: &apos;false&apos;
+                }
+            }
+            steps {
+                checkout([$class: &apos;GitSCM&apos;, branches: [[name: &quot;*/${BRANCH}&quot;]], extensions: [], userRemoteConfigs: [[credentialsId: &apos;jenkins&apos;, url: &quot;${CODE_REPOSITORY}&quot;]]])
+            }
+        }
+
+        stage(&apos;编译打包&apos;) {
+            when {
+                allOf {
+                    environment name: &apos;restart&apos;, value: &apos;false&apos;
+                }
+            }
+            steps {
+                sh &apos;mvn clean package -Dmaven.test.skip=true&apos;
+            }
+        }
+
+        stage(&apos;克隆配置仓库&apos;) {
+            when {
+                allOf {
+                    environment name: &apos;restart&apos;, value: &apos;false&apos;
+                }
+            }
+            steps {
+                checkout([$class: &apos;GitSCM&apos;, branches: [[name: &quot;*/${CONFIG_BRANCH}&quot;]], extensions: [[$class: &apos;RelativeTargetDirectory&apos;, relativeTargetDir: &apos;configs&apos;]], userRemoteConfigs: [[credentialsId: &apos;jenkins&apos;, url: &quot;${CONFIG_REPOSITORY}&quot;]]])
+            }
+        }
+
+        stage(&apos;构建镜像并上传到Harbor仓库&apos;) {
+            when {
+                allOf {
+                    environment name: &apos;restart&apos;, value: &apos;false&apos;
+                }
+            }
+            steps {
+                sh &quot;&quot;&quot;
+                	if [ "${TARGET}" = "contract-option-cycle-market-provider/target/contract-option-new-market-provider" ]; then
+                		mv ${TARGET} configs/ ; mv configs/contract-option-new-market-provider configs/	contract-option-cycle-market-provider
+            		else
+                		mv ${TARGET} configs/
+                	fi
+                &quot;&quot;&quot;
+
+                dir(&apos;configs/&apos;) {
+                    script {
+                        if ( env.IS_JOB == &quot;job&quot; ) {
+                            if (env.APP_NAME == &quot;report-day-sum-job&quot;) {
+                                docker.withRegistry(&quot;https://${IMAGE_HARBOR}&quot;, &quot;docker-registry&quot;) {
+                                    echo &quot;IMAGE_TAG: $IMAGE_TAG&quot;
+                                	def App = docker.build(&quot;${IMAGE_HARBOR}/${PROJECT_NAME}/${APP_NAME}:${IMAGE_TAG}&quot;, &quot;-f Dockerfile --build-arg JAVA_OPTS=&apos;${JAVA_OPTS}&apos; --build-arg APP_NAME=&apos;report-day-sum&apos; .&quot;)
+                                	App.push()
+                            	}
+                            	sh &apos;docker rmi ${IMAGE_HARBOR}/${PROJECT_NAME}/${APP_NAME}:${IMAGE_TAG}&apos;
+                        	} else {
+                            	docker.withRegistry(&quot;https://${IMAGE_HARBOR}&quot;, &quot;docker-registry&quot;) {
+                                	echo &quot;IMAGE_TAG: $IMAGE_TAG&quot;
+                            		def App = docker.build(&quot;${IMAGE_HARBOR}/${PROJECT_NAME}/${APP_NAME}:${IMAGE_TAG}&quot;, &quot;-f Dockerfile --build-arg JAVA_OPTS=&apos;${JAVA_OPTS}&apos; --build-arg APP_NAME=&apos;${APP_NAME}&apos; .&quot;)
+                            		App.push()
+                        		}
+                        		sh &apos;docker rmi ${IMAGE_HARBOR}/${PROJECT_NAME}/${APP_NAME}:${IMAGE_TAG}&apos;
+                    		}
+                		} else {
+                    		docker.withRegistry(&quot;https://${IMAGE_HARBOR}&quot;, &apos;docker-registry&apos;) {
+                        		def MAIN_CLASS = sh(script: &apos;cat ${APP_NAME}/bin/start.sh | grep MAIN_CLASS= |awk -F = \&apos;{print $2}\&apos;&apos;, returnStdout:true).trim()
+                    			def CLASSPATH = sh(script: &apos;echo &quot;/usr/local/apps/${APP_NAME}/classes:/usr/local/apps/${APP_NAME}/lib/*&quot;&apos;, returnStdout:true).trim()
+                    			echo &quot;IMAGE_TAG: $IMAGE_TAG&quot;
+                    			echo &quot;MAIN_CLASS: $MAIN_CLASS&quot;
+                    			echo &quot;CLASSPATH: $CLASSPATH&quot;
+                    			def App = docker.build(&quot;${IMAGE_HARBOR}/${PROJECT_NAME}/${APP_NAME}:${IMAGE_TAG}&quot;, &quot;-f Dockerfile --build-arg JAVA_OPTS=&apos;${JAVA_OPTS}&apos; --build-arg APP_NAME=&apos;${APP_NAME}&apos; --build-arg CLASSPATH=&apos;${CLASSPATH}&apos; --build-arg MAIN_CLASS=&apos;${MAIN_CLASS}&apos; .&quot;)
+                    			App.push()
+                			}
+
+                			sh &apos;docker rmi ${IMAGE_HARBOR}/${PROJECT_NAME}/${APP_NAME}:${IMAGE_TAG}&apos;
+            			}
+        			}
+                }
+
+            }
+        }
+
+        stage(&apos;部署到kubernetes集群中&apos;) {
+            when {
+                allOf {
+                    environment name: &apos;restart&apos;, value: &apos;false&apos;
+                }
+            }
+            steps {
+                withKubeConfig(credentialsId: &apos;{{ KUBE_CONFIG }}&apos;) {
+                    sh &apos;&apos;&apos;
+                    	cd configs/apps-chart
+                    	sed -i -e &quot;s#__NAME__#$APP_NAME#g&quot; \
+                    	    -e &quot;s#__PROJECT_NAME__#$PROJECT_NAME#g&quot; \
+                    	    -e &quot;s#__TAG__#$IMAGE_TAG#g&quot; \
+                    	    -e &quot;s#__LIMIT_MEMORY__#$LIMIT_MEMORY#g&quot; \
+                    	    -e &quot;s#__REQUESTS_MEMORY__#$REQUESTS_MEMORY#g&quot; \
+                    	    -e &quot;s#__SERVICE_NAME__#$SERVICE_NAME#g&quot; \
+                    	    -e &quot;s#__PORT__#$SERVICE_PORT#g&quot; \
+                    	    -e &quot;s#__REQUESTS_CPU__#$REQUESTS_CPU#g&quot; \
+                    	    -e &quot;s#__LIMIT_CPU__#$LIMIT_CPU#g&quot; \
+                    	    -e &quot;s#__REPLICAS__#$REPLICAS#g&quot; \
+                    	    -e &quot;s#__PRIORITY_CLASS_NAME__#$PRIORITY_CLASS_NAME#g&quot; \
+                    	    -e &quot;s#__TZ__#$TIMEZONE#&quot; values.yaml
+                    	helm template . > apps.yaml
+                    	cat apps.yaml
+                    	kubectl apply -f apps.yaml
+                    &apos;&apos;&apos;
+                }
+            }
+        }
+
+        stage(&apos;重启Pod&apos;) {
+            when {
+                allOf {
+                    environment name: &apos;restart&apos;, value: &apos;true&apos;
+                }
+
+            }
+            steps {
+                withKubeConfig(credentialsId: &apos;{{ KUBE_CONFIG }}&apos;) {
+                    sh &apos;&apos;&apos;
+                    	kubectl rollout restart deployment/${APP_NAME} -n apps
+                    &apos;&apos;&apos;
+                }
+            }
+        }
+    }
+
+}
+    	</script>
+    	<sandbox>true</sandbox>
+   	 	</definition>
+    	<triggers/>
+    	<disabled>false</disabled>
+</flow-definition>
